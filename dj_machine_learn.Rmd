@@ -1,0 +1,88 @@
+---
+title: "Practical Machine Learning"
+author: "Divakar"
+date: "Thursday, February 12, 2015"
+output: html_document
+---
+
+## Summary:
+To apply machine learning algorithms to predict human activity recognition . Data from <http://groupware.les.inf.puc-rio.br/har> is used for this purpose
+Training data will be divided into two parts 80% for training and 20% for  validating  . Based on outcome of initial models , other models  will be built. Goal is to achieve 90% accuracy . 
+
+### Load data
+```{r , echo=TRUE}
+library(caret)
+library(randomForest)
+pml <- read.csv("pml-training.csv" , na.strings=c("","NA"))
+dim(pml)
+
+```
+### Divide data into two sets 
+
+
+```{r, echo=TRUE}
+trainIndex <- createDataPartition(pml$classe, p = 0.80,list=FALSE)
+training <- pml[trainIndex,]
+validating <- pml[-trainIndex,]
+```
+### Explore and clean training data
+  
+Verify how many fields are NA . Calculate ratio of non-NA to NA  
+```{r, echo=TRUE}
+ratio_non_na_to_na <- sum(!is.na(training)) / sum(is.na(training)) 
+ratio_non_na_to_na
+
+```
+There are more NAs than non NA . Keep columns if it contains  less than 30% NA . Drop other columns
+```{r, echo=TRUE}
+rowCount <- nrow(training)
+training <- training[,colSums(is.na(training)) < 0.3 * rowCount]
+dim(pml)
+```
+  
+Take a look at and check if some columns can be dropped without causing any issues. By observation of data , X ,user_name ,cvtd_timestamp,new_window columns can be dropped .(output not produced to reduce clutter)
+
+```{r, echo=TRUE}
+training <- training[, - c(1,2,5,6)]
+dim(training)
+```
+  
+check for near zero variance  
+```{r echo=TRUE}
+nzv <- nearZeroVar(training[,-c(56)])
+nzv
+```
+There are no nearZero variance columns.  
+Identify  highly correlated columns and drop them
+```{r , echo=TRUE}
+DatCorr <- cor(training[,-c(56)])
+highCorr <- findCorrelation(DatCorr, 0.80)
+training <- training [,-highCorr]
+dim(training)
+```
+  
+With a large set of 43  predictors , random forest gives better result .
+  
+### Random Forest model with cross validation of 4 fold. Estimate accuracy
+```{r , echo=TRUE}
+trControl <- trainControl(method = "cv", number = 4)
+rf <- train(classe ~ ., method = "rf", trControl = trControl, data=training)
+rf
+rf$finalModel
+plot(varImp(rf, scale = FALSE))
+
+```
+
+  
+Based on above data ,Out of sample Error estimated to be 0.1% 
+  
+### Test model with validating data , create confusionMatrix and verify out of sample accuracy
+```{r , echo=TRUE}
+predictions <- predict(rf, validating)
+
+confusionMatrix(predictions, validating$classe)
+
+
+```
+  
+Accuracy of more than .99 indicate , algorithm worked correctly and out of sample error is within predicted range
